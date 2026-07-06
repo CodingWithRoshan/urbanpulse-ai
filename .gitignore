@@ -1,0 +1,42 @@
+# --- Environment / secrets ---
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+*.key
+service-account*.json
+
+# --- Backend (Python / FastAPI) ---
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.egg-info/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/venv/
+backend/.venv/
+backend/htmlcov/
+backend/.coverage
+
+# --- Frontend (Next.js / TypeScript) ---
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/next-env.d.ts
+frontend/.turbo/
+frontend/tsconfig.tsbuildinfo
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Logs ---
+*.log
+npm-debug.log*
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

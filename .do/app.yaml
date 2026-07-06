@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------------------
+# DigitalOcean App Platform spec - an ALTERNATIVE to the Cloud Run/GitHub
+# Actions deployment path documented in backend/README.md and
+# frontend/README.md. Use whichever one path fits your infra; you don't need
+# both.
+#
+# BEFORE DEPLOYING:
+#   1. Replace `repo: CodingWithRoshan/urbanpulse-ai` below (both services)
+#      with YOUR actual "<github-username>/<repo-name>". This is a
+#      placeholder and DigitalOcean will fail to find/link the repo
+#      otherwise.
+#   2. Connect your GitHub account to DigitalOcean first (App Platform ->
+#      Create App -> GitHub), so DO has permission to read the repo.
+#   3. Apply with: `doctl apps create --spec .do/app.yaml` (first time) or
+#      `doctl apps update <app-id> --spec .do/app.yaml` (subsequent changes).
+#   4. Every `type: SECRET` value below is intentionally left blank here -
+#      DigitalOcean will prompt you to fill each one in via the dashboard
+#      (or `doctl apps update` with `--spec` after adding real values to a
+#      local, git-ignored copy) rather than storing secrets in this
+#      committed file.
+#
+# The frontend now reads its backend URL and Google IDs at RUNTIME via
+# src/app/api/config/route.ts (see src/lib/runtimeConfig.ts for why) instead
+# of as NEXT_PUBLIC_* build args, so plain runtime env var keys below
+# (BACKEND_API_URL, GOOGLE_CLIENT_ID, GOOGLE_MAPS_API_KEY) are all that's
+# needed - no build-arg wiring required from DO App Platform at all.
+# ---------------------------------------------------------------------------
+name: urbanpulse-ai
+region: blr
+
+services:
+  - name: backend
+    github:
+      repo: CodingWithRoshan/urbanpulse-ai
+      branch: main
+      deploy_on_push: true
+    source_dir: backend
+    dockerfile_path: backend/Dockerfile
+    http_port: 8080
+    health_check:
+      http_path: /healthz
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    envs:
+      - key: ENVIRONMENT
+        value: production
+      - key: GEMINI_API_KEY
+        type: SECRET
+      - key: GOOGLE_API_KEY
+        type: SECRET
+      - key: OPENWEATHER_API_KEY
+        type: SECRET
+      - key: JWT_SECRET_KEY
+        type: SECRET
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        type: SECRET
+      - key: FIRESTORE_PROJECT_ID
+        value: ""
+      - key: FIRESTORE_ENABLED
+        value: "false"
+      - key: ALLOWED_ORIGINS
+        value: ${frontend.PUBLIC_URL}
+
+  - name: frontend
+    github:
+      repo: CodingWithRoshan/urbanpulse-ai
+      branch: main
+      deploy_on_push: true
+    source_dir: frontend
+    dockerfile_path: frontend/Dockerfile
+    http_port: 3000
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    envs:
+      - key: BACKEND_API_URL
+        value: ${backend.PUBLIC_URL}
+      - key: GOOGLE_CLIENT_ID
+        type: SECRET
+      - key: GOOGLE_MAPS_API_KEY
+        type: SECRET
+      - key: DEFAULT_LAT
+        value: "28.716"
+      - key: DEFAULT_LNG
+        value: "77.164"

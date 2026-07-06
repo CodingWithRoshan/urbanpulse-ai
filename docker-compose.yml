@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./backend/.env
+    environment:
+      - ALLOWED_ORIGINS=http://localhost:3000
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      # No build args anymore - the backend URL and Google IDs are read at
+      # container RUNTIME via src/app/api/config/route.ts, not baked in at
+      # build time. See src/lib/runtimeConfig.ts for why this changed.
+    environment:
+      # IMPORTANT: this value is sent to and used by the BROWSER (apiClient.ts
+      # fetches run client-side), so it must be a URL the browser can reach -
+      # NOT the Docker-internal service name "backend". Since docker-compose
+      # publishes the backend on the host at localhost:8080, that's what
+      # goes here, not http://backend:8080 (which only resolves inside the
+      # compose network, not from your browser).
+      - BACKEND_API_URL=http://localhost:8080
+      - GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped

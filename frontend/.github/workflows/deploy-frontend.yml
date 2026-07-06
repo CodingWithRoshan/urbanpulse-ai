@@ -1,0 +1,94 @@
+name: Deploy Frontend to Cloud Run
+
+# Referenced by frontend/README.md ("`.github/workflows/deploy-frontend.yml`
+# type-checks, builds, and deploys to Cloud Run...").
+#
+# The frontend reads its backend URL and Google IDs at RUNTIME via
+# src/app/api/config/route.ts (see src/lib/runtimeConfig.ts), not as
+# NEXT_PUBLIC_* build args. That means the exact same built image works in
+# every environment, and this workflow can use the simple
+# `gcloud run deploy --source .` path plus `--set-env-vars` - no Artifact
+# Registry, no manual `docker build --build-arg`, no image tagging to manage.
+#
+# Required repository secrets:
+#   GCP_PROJECT_ID, GCP_REGION, GCP_WIF_PROVIDER, GCP_SERVICE_ACCOUNT
+#   GOOGLE_CLIENT_ID       - Google OAuth Web Client ID
+#   GOOGLE_MAPS_API_KEY    - browser-restricted Maps JS API key
+#
+# Required repository/environment variable:
+#   BACKEND_URL - the Cloud Run URL of the deployed backend service
+#                 (e.g. https://urbanpulse-backend-xxxxx.a.run.app). Set this
+#                 once, after the backend workflow's first successful deploy.
+#                 Changing it later needs no rebuild - just re-run this
+#                 workflow (or `gcloud run services update` directly).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    name: Type-check & build (sanity check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy urbanpulse-frontend \
+            --source . \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --allow-unauthenticated \
+            --set-env-vars BACKEND_API_URL="${{ vars.BACKEND_URL }}",GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}",GOOGLE_MAPS_API_KEY="${{ secrets.GOOGLE_MAPS_API_KEY }}"
+
+      - name: Show deployed URL
+        run: gcloud run services describe urbanpulse-frontend --project "${{ secrets.GCP_PROJECT_ID }}" --region "${{ secrets.GCP_REGION }}" --format="value(status.url)"
