@@ -26,11 +26,28 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+/**
+ * Second, independent layer of defense against the `/api/v1/api/v1/...`
+ * duplication bug: even though `/api/config` (route.ts) already normalizes
+ * the base URL server-side, this strips a trailing "/api/v1" or "/api" again
+ * here, right before it's concatenated with a path. This means the bug
+ * cannot recur even if `getRuntimeConfig()` ever returns an unnormalized
+ * value from a different source (e.g. FALLBACK_CONFIG is hand-edited later,
+ * or a future config provider is swapped in without going through route.ts).
+ */
+function normalizeApiBaseUrl(raw: string): string {
+  let url = raw.trim().replace(/\/+$/, "");
+  url = url.replace(/\/api\/v1$/i, "");
+  url = url.replace(/\/api$/i, "");
+  return url;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit & { asFormData?: boolean } = {}
 ): Promise<T> {
-  const { apiBaseUrl } = await getRuntimeConfig();
+  const { apiBaseUrl: rawApiBaseUrl } = await getRuntimeConfig();
+  const apiBaseUrl = normalizeApiBaseUrl(rawApiBaseUrl);
 
   const headers = new Headers(options.headers);
   if (!options.asFormData && !(options.body instanceof FormData)) {
